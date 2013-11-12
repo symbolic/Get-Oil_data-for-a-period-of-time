@@ -13,7 +13,6 @@ class oneline_item():	#数据结构
 		self.len = ''	#长度
 		self.data = ''	#数据
 
-
 def power(base, n):				#16进制转10进制：base = 256,
 	if n == 1:
 		return 1
@@ -40,6 +39,55 @@ def bcd_decimal(hex, n = 0):		#BCD转换成10进制，n为小数点个数, 返�
 		return b/power(10, n+1)
 	else:
 		return b
+
+def trade_type(type):			#交易类型字符串
+	a = bin(int(type, 16))
+	type_length = len(a) - 2
+	base = extend = ''
+
+	if type[1] == '0' :
+		base = '正常加油'
+	if type[1] == '1' :
+		base = '逃卡'
+	if type[1] == '2' :
+		base = '错卡'
+	if type[1] == '3' :
+		base = '补扣'
+	if type[1] == '4' :
+		base = '补充'
+	if type[1] == '5' :
+		base = '员工上班'
+	if type[1] == '6' :
+		base = '员工下班'
+	if type[1] == '7' :
+		base = '非卡'
+	if type[1] == '8' :
+		base = '油价接收'
+	if type[1] == '9' :
+		base = '卡片交易出错'	
+
+	if type_length == 5:
+		extend = '扣款签名有效'
+
+	if type_length == 7:
+		if a[4] == '1' :
+			extend = '使用油机黑（白）名单，扣款签名有效'
+		else:
+			extend = '使用后台黑（白）名单，扣款签名有效'
+
+	if type_length == 8:
+		if (a[3] == '0') & (a[5] == '0'):
+			extend = '卡错，使用后台黑（白）名单'
+		if (a[3] == '0') & (a[5] == '1'):
+			extend = '卡错，使用后台黑（白）名单，扣款签名有效'
+		if (a[3] == '1') & (a[5] == '0'):
+			extend = '卡错，使用油机黑（白）名单'
+		if (a[3] == '1') & (a[5] == '1'):
+			extend = '卡错，使用油机黑（白）名单，扣款签名有效'
+	if type_length > 4:
+		return extend + '，' + base
+	else:
+		return base
 
 def case31(data):				#加油机发送实时信息命令
 	if bcd_decimal(data[13:18], 0) < 2 :
@@ -89,7 +137,6 @@ def case320(data):				#加油机发送成交数据
 	if bcd_decimal(data[13:18], 0) < 96 :
 		return 'data error\n'
 	operate = ''
-	data_list = data.split(' ')
 	operate = '枪号：' + hex_decimal(data[223:225], 0) + ',POS-TTC：' + hex_decimal(data[22:33], 0)  + ',交易时间：' + data[37:57] + ',交易类型：' + trade_type(data[34:36]) + ',卡号：' + data[58:87] + ',余额：' + hex_decimal(data[88:99],2) + ',金额：' + hex_decimal(data[100:108],2) + ',单价：' + hex_decimal(data[241:246],2) + ',升数：' + hex_decimal(data[232:240],2) + ',油品：' + data[226:231] + ',升累计：' + hex_decimal(data[250:261],2) + '\n'	
 	return operate
 
@@ -104,50 +151,48 @@ def case321(data):				#PC机回应成交数据
 	else:
 		return '命令字：' + data_list[7] + '(PC机回应成交数据),结果：T-MAC错\n'
 
-def cmd0(command, data):		#油机发送
-	if command == '30':
-		return case300(data)
+def case360(data):				#加油机申请查询黑/白名单
+	data_list = data.split(' ')
+	card_no = data[22:51]
 
+	return '命令字: ' + data_list[7] + '（加油机向PC机查询黑/白名单）'+';卡号：' + card_no +'\n'
+
+def case361(data):				#PC机黑/白名单查询结果
+	data_list = data.split(' ')
+	flag = data_list[8]
+	card_type = data_list[11]
+	
+	if bin(int(flag, 16))[-1:] == '0' :			#匹配
+		if card_type == '01':	#用户卡不能加油
+			return '命令字: ' + data_list[7] + '（PC机黑/白名单查询结果）;结果：匹配（用户卡不能加油）\n'
+		if (card_type == '04')|(card_type == '05')|(card_type == '06'):	#内部卡可以能加油
+			return '命令字: ' + data_list[7] + '（PC机黑/白名单查询结果）;结果：匹配（内部卡可以加油）\n'
+
+	else:
+		if card_type == '01':	#用户卡可以加油
+			return '命令字: ' + data_list[7] + '（PC机黑/白名单查询结果）;结果：不匹配（用户卡可以加油）\n'
+		if (card_type == '04')|(card_type == '05')|(card_type == '06'):	#内部卡可以能加油
+			return '命令字: ' + data_list[7] + '（PC机黑/白名单查询结果）;结果：不匹配（内部卡不能加油）\n'
+
+def cmd0(command, data):		#油机发送
 	if command == '31':
 		return case31(data)
 
 	if command == '32':
 		return case320(data)
 
+	if command == '36':
+		return case360(data)
+
 	else:
 		return 'unknown\n'
 
 def cmd1(command, data):		#油机接收
-	if command == '30':
-		return case301(data)
-
 	if command == '32':
 		return case321(data)
 
-	if command == '33':
-		return case331(data)
-
-	if command == '34':
-		return case341(data)
-
-	if command == '35':
-		return case351(data)
-
 	if command == '36':
 		return case361(data)
-
-	if command == '38':
-		return case381(data)
-
-	if command == '3A':
-		return case3A1(data)
-
-	if command == '3C':
-		return case3C(data)
-
-	if command == '3E':
-		return case3E(data)
-
 
 	else:
 		return 'unknown\n'
@@ -218,9 +263,10 @@ def main():
 		print 'Usage: ' + command + ' file.log'
 		sys.exit()
 		
-	version = 'Version: 1.0.0.0'
+	version = 'Version: 1.0.0.1'
 	print '\n****** Analyze oil data ******\n' + version
-	print '\nNote: Only Card and Fueling data'
+	print '\nNote: Add trade information (TTC) '
+	
 	fp_src = open(sys.argv[1], 'r')
 	fp_dest = open('oildata.log', 'w')
 	
@@ -233,42 +279,62 @@ def main():
 		card_string1 = '31 01 01'					#实时信息：插卡
 		card_string2 = '36'							#查询黑白名单
 		oil_string = '31 01 02'
+		trade_string = '96 32'
 		card_status1 = data[19:27]					# 31 01 01
-		card_status2 = data[19:21]
-		oil_status = data[19:27]
+		card_status2 = data[19:21]					# 36
+		oil_status = data[19:27]					# 31 01 02
+		trade_status = data[16:21]					# 96 32
 
 		if (card_status1 == card_string1) | (card_status2 == card_string2):
 			oil_type = 1	#插卡或者验卡状态
 			last_liter = 0
 		if oil_status == oil_string:
 			oil_type = 2	#加油状态
+		if trade_status == trade_string:		#交易数据
+			trade_liter = int(hex_decimal(data[232:240], 0))
+			if old_type == 2:
+				fp_dest.write(lastline)
+				if trade_liter != last_liter:
+					fp_dest.write('\n')
+				fp_dest.write(oneline + '\n')
+			if old_type == 1:
+				fp_dest.write(lastline + '\n')
+				fp_dest.write(oneline + '\n')
 
-		if (card_status1 != card_string1) & (card_status2 != card_string2) & (oil_status != oil_string):
+			if (old_type == 3) | (old_type == 0):
+				fp_dest.write(oneline + '\n')
+
+			old_type = 3
 			oneline = fp_src.readline()		#非插卡或加油状态，跳过
 			continue
-		
-		if old_type == oil_type:	#与上一行的状态相同
-			if oil_type == 2:		#都是加油状态
-				oil_liter = int(hex_decimal(data[43:51], 0))
-				if oil_liter < last_liter:	#实时数据小于上一行
-					fp_dest.write(lastline + '\n')	#写入上一行
-					fp_dest.write(oneline)
-				last_liter = oil_liter
-			lastline = oneline
 
-		if old_type != oil_type:						#状态切换
-			fp_dest.write(lastline)	#写入上一行
-			if old_type == 1:		#从插卡切换到加油，写入当行
-				fp_dest.write(oneline)
-			if old_type == 2:
-				fp_dest.write('\n')
-				pass
-			lastline = oneline
+		if (card_status1 != card_string1) & (card_status2 != card_string2) & (oil_status != oil_string) & (trade_status != trade_string):
+			oneline = fp_src.readline()		#非插卡或加油状态，跳过
+			continue
+		if 3 != old_type:		
+			if old_type == oil_type:	#与上一行的状态相同
+				if oil_type == 2:		#都是加油状态
+					oil_liter = int(hex_decimal(data[43:51], 0))
+					if oil_liter < last_liter:	#实时数据小于上一行
+						fp_dest.write(lastline + '\n')	#写入上一行
+						fp_dest.write(oneline)
+					last_liter = oil_liter
+				lastline = oneline
+
+			if old_type != oil_type:						#状态切换
+				fp_dest.write(lastline)	#写入上一行
+				if old_type != 2:		#从插卡切换到加油，写入当行
+					fp_dest.write(oneline)
+				if old_type != 1:		#从加油切换到插卡，写入回车
+					fp_dest.write('\n')
 					
+				lastline = oneline
+						
 		old_type = oil_type	#读取下一行
 		oneline = fp_src.readline()
 
-	fp_dest.write(lastline + '\n')
+	if (card_status1 == card_string1) | (card_status2 == card_string2) | (oil_status == oil_string) | (trade_status == trade_string):
+		fp_dest.write(lastline + '\n')
 	fp_src.close()	#关闭文件
 	fp_dest.close()
 
