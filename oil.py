@@ -29,6 +29,23 @@ def hex_decimal(hex, n = 0):		#16进制转换成10进制，n为小数点个数, 
 	else:
 		return str(b)
 
+def decimal_hex(dec, n = 1):	#10进制转换为16进制，n为字节数
+	temp = hex(int(dec))[2:]
+	a = 2*n
+	if len(temp) > a:
+		return 'decimal_hex error'
+	
+	b = '0'*(a-len(temp)) + temp
+	if n == 1:
+		return b
+	c = ''
+	y = 0
+	for x in xrange(0, n-1):
+		c += b[0+2*x : 2+2*x] + ' '
+		y = x
+	c += b[2+2*y : 4+2*y]
+	return 	c
+
 def bcd_decimal(hex, n = 0):		#BCD转换成10进制，n为小数点个数, 返回数值
 	temp = hex.split(' ')
 	b = 0
@@ -258,15 +275,18 @@ def analyze(filename):
 
 def main():
 
-	if len(sys.argv) != 2:
+	if len(sys.argv) != 3:
 		command = sys.argv[0].split('\\')[len(sys.argv[0].split('\\')) - 1]
-		print 'Usage: ' + command + ' file.log'
+		print 'Usage: ' + command + ' file.log  Nozzle_no'
 		sys.exit()
 		
-	version = 'Version: 1.0.0.1'
+	version = 'Version: 1.0.0.2'
 	print '\n****** Analyze oil data ******\n' + version
 	print '\nNote: Add trade information (TTC) '
+	print '\nNote: Requaired input the parameter called Nozzle_no.(base 10)\n'
 	
+	Nozzle_no = decimal_hex(sys.argv[2], 1)
+		
 	fp_src = open(sys.argv[1], 'r')
 	fp_dest = open('oildata.log', 'w')
 	
@@ -276,13 +296,13 @@ def main():
 	oneline = fp_src.readline()
 	while oneline:
 		data = oneline.split(',')[4].split(':')[1]	#数据
-		card_string1 = '31 01 01'					#实时信息：插卡
+		card_string1 = '31 01 01 ' + Nozzle_no					#实时信息：插卡
 		card_string2 = '36'							#查询黑白名单
-		oil_string = '31 01 02'
+		oil_string = '31 01 02 ' + Nozzle_no
 		trade_string = '96 32'
-		card_status1 = data[19:27]					# 31 01 01
+		card_status1 = data[19:30]					# 31 01 01
 		card_status2 = data[19:21]					# 36
-		oil_status = data[19:27]					# 31 01 02
+		oil_status = data[19:30]					# 31 01 02
 		trade_status = data[16:21]					# 96 32
 
 		if (card_status1 == card_string1) | (card_status2 == card_string2):
@@ -291,17 +311,19 @@ def main():
 		if oil_status == oil_string:
 			oil_type = 2	#加油状态
 		if trade_status == trade_string:		#交易数据
+			#last_liter = 0
 			trade_liter = int(hex_decimal(data[232:240], 0))
-			if old_type == 2:
+			Nozzle_no = int(hex_decimal(data[223:225], 0))
+			if old_type == 2:	#加油状态切换到上传交易
 				fp_dest.write(lastline)
-				if trade_liter != last_liter:
+				if trade_liter != last_liter:	#不是同一笔交易数据
 					fp_dest.write('\n')
 				fp_dest.write(oneline + '\n')
-			if old_type == 1:
+			if old_type == 1:	#插卡切换到上传交易数据
 				fp_dest.write(lastline + '\n')
 				fp_dest.write(oneline + '\n')
 
-			if (old_type == 3) | (old_type == 0):
+			if (old_type == 3) | (old_type == 0):	#上一条也是上传交易
 				fp_dest.write(oneline + '\n')
 
 			old_type = 3
@@ -322,13 +344,20 @@ def main():
 				lastline = oneline
 
 			if old_type != oil_type:						#状态切换
-				fp_dest.write(lastline)	#写入上一行
-				if old_type != 2:		#从插卡切换到加油，写入当行
+				if old_type == 1:		#从插卡切换到加油，写入当行
+					fp_dest.write(lastline)
 					fp_dest.write(oneline)
-				if old_type != 1:		#从加油切换到插卡，写入回车
+				if old_type == 2:		#从加油切换到插卡，写入回车
 					fp_dest.write('\n')
+
+		if 3 == old_type:				#从交易切换到加油
+			if oil_type == 2:
+				fp_dest.write(oneline)
+				last_liter = 0
+			if oil_type == 1:
+				pass
 					
-				lastline = oneline
+		lastline = oneline
 						
 		old_type = oil_type	#读取下一行
 		oneline = fp_src.readline()
