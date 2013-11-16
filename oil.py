@@ -18,7 +18,7 @@ def power(base, n):				#16进制转10进制：base = 256,
 		return 1
 	return base*power(base, n-1)
 
-def hex_decimal(hex, n = 0):		#16进制转换成10进制，n为小数点个数, 返回值str
+def hex_decimal(hex, n = 0):	#16进制转换成10进制，n为小数点个数, 返回值str
 	temp = hex.split(' ')
 	b = 0
 	for i in range(len(temp)):
@@ -46,7 +46,7 @@ def decimal_hex(dec, n = 1):	#10进制转换为16进制，n为字节数
 	c += b[2+2*y : 4+2*y]
 	return 	c
 
-def bcd_decimal(hex, n = 0):		#BCD转换成10进制，n为小数点个数, 返回数值
+def bcd_decimal(hex, n = 0):	#BCD转换成10进制，n为小数点个数, 返回数值
 	temp = hex.split(' ')
 	b = 0
 	for i in range(len(temp)):
@@ -297,15 +297,13 @@ def main():
 	while oneline:
 		data = oneline.split(',')[4].split(':')[1]	#数据
 		card_string1 = '31 01 01 ' + Nozzle_no					#实时信息：插卡
-		card_string2 = '36'							#查询黑白名单
 		oil_string = '31 01 02 ' + Nozzle_no
 		trade_string = '96 32'
 		card_status1 = data[19:30]					# 31 01 01
-		card_status2 = data[19:21]					# 36
 		oil_status = data[19:30]					# 31 01 02
 		trade_status = data[16:21]					# 96 32
 
-		if (card_status1 == card_string1) | (card_status2 == card_string2):
+		if (card_status1 == card_string1) :
 			oil_type = 1	#插卡或者验卡状态
 			last_liter = 0
 		if oil_status == oil_string:
@@ -313,24 +311,26 @@ def main():
 		if trade_status == trade_string:		#交易数据
 			#last_liter = 0
 			trade_liter = int(hex_decimal(data[232:240], 0))
-			Nozzle_no = int(hex_decimal(data[223:225], 0))
-			if old_type == 2:	#加油状态切换到上传交易
-				fp_dest.write(lastline)
-				if trade_liter != last_liter:	#不是同一笔交易数据
-					fp_dest.write('\n')
-				fp_dest.write(oneline + '\n')
-			if old_type == 1:	#插卡切换到上传交易数据
-				fp_dest.write(lastline + '\n')
-				fp_dest.write(oneline + '\n')
+			trade_nozzle = data[223:225]
+			if trade_nozzle == Nozzle_no:	#对应枪的交易处理
+				if old_type == 2:	#加油状态切换到上传交易
+					fp_dest.write(lastline)
+					if trade_liter != last_liter:	#不是同一笔交易数据
+						fp_dest.write('\n')
+					fp_dest.write(oneline + '\n')
+				if old_type == 1:	#插卡切换到上传交易数据
+					fp_dest.write(lastline + '\n')
+					fp_dest.write(oneline + '\n')
 
-			if (old_type == 3) | (old_type == 0):	#上一条也是上传交易
-				fp_dest.write(oneline + '\n')
+				if (old_type == 3) | (old_type == 0):	#上一条也是上传交易
+					fp_dest.write(oneline + '\n')
 
-			old_type = 3
+				old_type = 3
 			oneline = fp_src.readline()		#非插卡或加油状态，跳过
 			continue
+		
 
-		if (card_status1 != card_string1) & (card_status2 != card_string2) & (oil_status != oil_string) & (trade_status != trade_string):
+		if (card_status1 != card_string1)  & (oil_status != oil_string) & (trade_status != trade_string):
 			oneline = fp_src.readline()		#非插卡或加油状态，跳过
 			continue
 		if 3 != old_type:		
@@ -343,7 +343,7 @@ def main():
 					last_liter = oil_liter
 				lastline = oneline
 
-			if old_type != oil_type:						#状态切换
+			if old_type != oil_type:	#状态切换
 				if old_type == 1:		#从插卡切换到加油，写入当行
 					fp_dest.write(lastline)
 					fp_dest.write(oneline)
@@ -355,14 +355,15 @@ def main():
 				fp_dest.write(oneline)
 				last_liter = 0
 			if oil_type == 1:
-				pass
+				lastline = oneline
 					
 		lastline = oneline
 						
 		old_type = oil_type	#读取下一行
 		oneline = fp_src.readline()
 
-	if (card_status1 == card_string1) | (card_status2 == card_string2) | (oil_status == oil_string) | (trade_status == trade_string):
+	if (card_status1 == card_string1) | (oil_status == oil_string) | (trade_status == trade_string):
+	#if (card_status1 == card_string1) | (card_status2 == card_string2) | (oil_status == oil_string) | (trade_status == trade_string):
 		fp_dest.write(lastline + '\n')
 	fp_src.close()	#关闭文件
 	fp_dest.close()
